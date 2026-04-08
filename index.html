@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="description" content="ReadFlow - Fast offline PDF reader PWA">
+    <title>ReadFlow</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --border: rgba(255,255,255,0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Lock Screen */
+        #lock-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        #lock-screen.hidden {
+            display: none;
+        }
+
+        .lock-icon {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            opacity: 0.5;
+        }
+
+        .lock-input {
+            width: 200px;
+            padding: 1rem;
+            font-size: 1.5rem;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            outline: none;
+            letter-spacing: 0.5rem;
+        }
+
+        .lock-input:focus {
+            border-color: var(--accent);
+        }
+
+        .lock-hint {
+            margin-top: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Header */
+        header {
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .btn-icon {
+            padding: 0.6rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+        }
+
+        /* Library */
+        #library {
+            padding: 1rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .library-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .stat {
+            flex: 1;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* Book List with Virtual Scrolling */
+        #book-list {
+            position: relative;
+            min-height: 50vh;
+        }
+
+        .book-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .book-item:active {
+            transform: scale(0.98);
+        }
+
+        .book-item.selected {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.1);
+        }
+
+        .book-cover {
+            width: 50px;
+            height: 70px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .book-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .book-title {
+            font-size: 1rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.25rem;
+        }
+
+        .book-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .book-status {
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-to-read { background: var(--bg-secondary); color: var(--text-secondary); }
+        .status-reading { background: var(--accent); color: white; }
+        .status-completed { background: var(--success); color: #000; }
+        .status-priority { background: var(--warning); color: #000; }
+
+        .book-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .checkbox.checked {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .checkbox.checked::after {
+            content: '✓';
+            font-size: 1rem;
+        }
+
+        /* Selection Mode */
+        #selection-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: var(--bg-secondary);
+            padding: 1rem;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border);
+            z-index: 200;
+        }
+
+        #selection-bar.active {
+            display: flex;
+        }
+
+        .selection-count {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .selection-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Reader Modal */
+        #reader-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 5000;
+            display: none;
+            flex-direction: column;
+        }
+
+        #reader-modal.active {
+            display: flex;
+        }
+
+        #reader-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #reader-modal.show-controls #reader-header {
+            opacity: 1;
+        }
+
+        #reader-content {
+            flex: 1;
+            overflow-y: scroll;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #reader-canvas-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .page-canvas {
+            display: block;
+            width: 100%;
+            margin: 0 auto;
+            background: #fff;
+        }
+
+        .page-spacer {
+            background: #000;
+        }
+
+        #reader-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #reader-modal.show-controls #reader-footer {
+            opacity: 1;
+        }
+
+        .reader-progress {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Gesture Zones */
+        .gesture-zone {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            width: 30%;
+            z-index: 5;
+        }
+
+        .gesture-left { left: 0; }
+        .gesture-right { right: 0; }
+        .gesture-center { left: 30%; width: 40%; }
+
+        /* Context Menu */
+        #context-menu {
+            position: fixed;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.5rem;
+            min-width: 180px;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        #context-menu.active {
+            display: block;
+        }
+
+        .context-item {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .context-item:hover {
+            background: var(--bg-card);
+        }
+
+        .context-item.danger {
+            color: var(--accent);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* File Input */
+        #file-input {
+            display: none;
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-card);
+            padding: 0.75rem 1.5rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 10000;
+            border: 1px solid var(--border);
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .book-item {
+                padding: 1.25rem;
+            }
+            
+            .book-cover {
+                width: 70px;
+                height: 100px;
+            }
+        }
+
+        /* Fullscreen */
+        :fullscreen {
+            background: #000;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-card);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Lock Screen -->
+    <div id="lock-screen">
+        <div class="lock-icon">🔒</div>
+        <input type="password" id="lock-input" class="lock-input" maxlength="6" placeholder="••••••" inputmode="numeric">
+        <p class="lock-hint">Enter 6-digit passcode</p>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title">📚 ReadFlow</div>
+        <div class="header-actions">
+            <button class="btn btn-icon" id="settings-btn" title="Settings">⚙️</button>
+            <button class="btn btn-primary" id="import-btn">
+                <span>📁</span> Import
+            </button>
+        </div>
+    </header>
+
+    <!-- Library -->
+    <main id="library">
+        <div class="library-stats">
+            <div class="stat">
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="stat-reading">0</div>
+                <div class="stat-label">Reading</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="stat-completed">0</div>
+                <div class="stat-label">Completed</div>
+            </div>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="tab active" data-filter="all">All</button>
+            <button class="tab" data-filter="to-read">To Read</button>
+            <button class="tab" data-filter="reading">Reading</button>
+            <button class="tab" data-filter="completed">Completed</button>
+            <button class="tab" data-filter="priority">Priority</button>
+        </div>
+
+        <div id="book-list">
+            <div class="empty-state">
+                <div class="empty-icon">📚</div>
+                <p>No PDFs yet</p>
+                <p style="margin-top: 0.5rem; font-size: 0.9rem;">Tap Import to add PDFs</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Selection Bar -->
+    <div id="selection-bar">
+        <span class="selection-count">0 selected</span>
+        <div class="selection-actions">
+            <button class="btn btn-secondary" id="select-all-btn">Select All</button>
+            <button class="btn btn-secondary" id="delete-selected-btn">Delete</button>
+            <button class="btn btn-primary" id="done-selecting-btn">Done</button>
+        </div>
+    </div>
+
+    <!-- Reader Modal -->
+    <div id="reader-modal">
+        <div id="reader-header">
+            <button class="btn btn-icon" id="reader-back-btn">← Back</button>
+            <span id="reader-title" style="font-weight: 600;"></span>
+            <button class="btn btn-icon" id="reader-menu-btn">⋮</button>
+        </div>
+        
+        <div class="gesture-zone gesture-left" id="gesture-left"></div>
+        <div class="gesture-zone gesture-center" id="gesture-center"></div>
+        <div class="gesture-zone gesture-right" id="gesture-right"></div>
+        
+        <div id="reader-content">
+            <div id="reader-canvas-container"></div>
+        </div>
+        
+        <div id="reader-footer">
+            <button class="btn btn-icon" id="prev-pdf-btn">◀ Prev</button>
+            <span class="reader-progress" id="reader-progress">Page 1 / 1</span>
+            <button class="btn btn-icon" id="next-pdf-btn">Next ▶</button>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu"></div>
+
+    <!-- Hidden File Input -->
+    <input type="file" id="file-input" accept=".pdf" multiple>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <script>
+        // ==================== CONFIGURATION ====================
+        const CONFIG = {
+            DB_NAME: 'ReadFlowDB',
+            DB_VERSION: 1,
+            STORE_NAME: 'pdfs',
+            MAX_BUFFER_SIZE: 3,
+            PRELOAD_THRESHOLD: 0.75,
+            PAGE_BUFFER: 2,
+            RENDER_SCALE: window.devicePixelRatio || 1,
+            PASSWORD_KEY: 'readflow_passcode'
+        };
+
+        // ==================== INDEXEDDB MANAGER ====================
+        class DBManager {
+            constructor() {
+                this.db = null;
+            }
+
+            async open() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve(this.db);
+                    };
+                    
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
+                            const store = db.createObjectStore(CONFIG.STORE_NAME, { keyPath: 'id' });
+                            store.createIndex('status', 'status', { unique: false });
+                            store.createIndex('order', 'order', { unique: false });
+                            store.createIndex('lastModified', 'lastModified', { unique: false });
+                        }
+                    };
+                });
+            }
+
+            async getAll() {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readonly');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async getById(id) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readonly');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    const request = store.get(id);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async add(pdf) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    const request = store.add(pdf);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async update(pdf) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    const request = store.put(pdf);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async delete(id) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    const request = store.delete(id);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async bulkDelete(ids) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    ids.forEach(id => store.delete(id));
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+
+            async getMaxOrder() {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(CONFIG.STORE_NAME, 'readonly');
+                    const store = tx.objectStore(CONFIG.STORE_NAME);
+                    const request = store.getAll();
+                    request.onsuccess = () => {
+                        const items = request.result;
+                        const max = items.reduce((max, item) => Math.max(max, item.order || 0), -1);
+                        resolve(max + 1);
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+
+        // ==================== PDF BUFFER MANAGER ====================
+        class PDFBufferManager {
+            constructor() {
+                this.buffer = new Map(); // id -> { pdfDoc, lastAccess }
+                this.loadQueue = [];
+                this.maxSize = CONFIG.MAX_BUFFER_SIZE;
+            }
+
+            async get(id, blob) {
+                if (this.buffer.has(id)) {
+                    const item = this.buffer.get(id);
+                    item.lastAccess = Date.now();
+                    return item.pdfDoc;
+                }
+
+                const arrayBuffer = await blob.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdfDoc = await loadingTask.promise;
+
+                if (this.buffer.size >= this.maxSize) {
+                    this.evictOldest();
+                }
+
+                this.buffer.set(id, { pdfDoc, lastAccess: Date.now(), blob });
+                return pdfDoc;
+            }
+
+            evictOldest() {
+                let oldestId = null;
+                let oldestTime = Infinity;
+
+                for (const [id, item] of this.buffer.entries()) {
+                    if (item.lastAccess < oldestTime) {
+                        oldestTime = item.lastAccess;
+                        oldestId = id;
+                    }
+                }
+
+                if (oldestId) {
+                    const item = this.buffer.get(oldestId);
+                    if (item.pdfDoc) {
+                        item.pdfDoc.destroy();
+                    }
+                    this.buffer.delete(oldestId);
+                }
+            }
+
+            async preload(id, blob) {
+                if (this.buffer.has(id)) return;
+                
+                try {
+                    const arrayBuffer = await blob.arrayBuffer();
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    const pdfDoc = await loadingTask.promise;
+                    
+                    if (this.buffer.size >= this.maxSize) {
+                        this.evictOldest();
+                    }
+                    
+                    this.buffer.set(id, { pdfDoc, lastAccess: Date.now(), blob, preload: true });
+                } catch (e) {
+                    console.warn('Preload failed:', e);
+                }
+            }
+
+            clear() {
+                for (const [id, item] of this.buffer.entries()) {
+                    if (item.pdfDoc) {
+                        item.pdfDoc.destroy();
+                    }
+                }
+                this.buffer.clear();
+            }
+        }
+
+        // ==================== VIRTUAL SCROLL RENDERER ====================
+        class VirtualScrollRenderer {
+            constructor(container, onProgress) {
+                this.container = container;
+                this.onProgress = onProgress;
+                this.pdfDoc = null;
+                this.currentPage = 1;
+                this.totalPages = 0;
+                this.renderedPages = new Map();
+                this.visibleRange = { start: 0, end: 0 };
+                this.pageHeights = [];
+                this.containerHeight = 0;
+                this.scrollOffset = 0;
+                this.isRendering = false;
+                this.renderQueue = [];
+            }
+
+            async loadPDF(pdfDoc) {
+                this.pdfDoc = pdfDoc;
+                this.totalPages = pdfDoc.numPages;
+                this.pageHeights = new Array(this.totalPages).fill(0);
+                this.renderedPages.clear();
+                this.container.innerHTML = '';
+                
+                // Create placeholders
+                this.updatePlaceholders();
+                
+                // Render initial visible pages
+                await this.renderVisiblePages();
+            }
+
+            updatePlaceholders() {
+                const avgHeight = 1200; // Estimated page height
+                let totalHeight = 0;
+                
+                this.pageHeights.forEach((height, index) => {
+                    if (height === 0) {
+                        height = avgHeight / CONFIG.RENDER_SCALE;
+                    }
+                    totalHeight += height;
+                });
+
+                this.container.style.height = `${totalHeight}px`;
+                this.containerHeight = totalHeight;
+            }
+
+            async renderVisiblePages() {
+                if (this.isRendering || !this.pdfDoc) return;
+                
+                this.isRendering = true;
+                const scrollTop = this.container.parentElement.scrollTop;
+                const viewportHeight = this.container.parentElement.clientHeight;
+                
+                // Calculate visible range
+                let cumulativeHeight = 0;
+                let startIndex = 0;
+                let endIndex = this.totalPages - 1;
+
+                for (let i = 0; i < this.totalPages; i++) {
+                    const height = this.pageHeights[i] || (1200 / CONFIG.RENDER_SCALE);
+                    if (cumulativeHeight + height > scrollTop - viewportHeight) {
+                        startIndex = i;
+                        break;
+                    }
+                    cumulativeHeight += height;
+                }
+
+                cumulativeHeight = 0;
+                for (let i = this.totalPages - 1; i >= 0; i--) {
+                    cumulativeHeight += this.pageHeights[i] || (1200 / CONFIG.RENDER_SCALE);
+                    if (cumulativeHeight > viewportHeight - scrollTop) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+
+                startIndex = Math.max(0, startIndex - CONFIG.PAGE_BUFFER);
+                endIndex = Math.min(this.totalPages - 1, endIndex + CONFIG.PAGE_BUFFER);
+
+                this.visibleRange = { start: startIndex, end: endIndex };
+
+                // Render pages in range
+                for (let pageNum = startIndex; pageNum <= endIndex; pageNum++) {
+                    if (!this.renderedPages.has(pageNum)) {
+                        this.renderQueue.push(pageNum);
+                    }
+                }
+
+                // Clean up off-screen pages
+                for (const [pageNum, element] of this.renderedPages.entries()) {
+                    if (pageNum < startIndex || pageNum > endIndex) {
+                        element.remove();
+                        this.renderedPages.delete(pageNum);
+                    }
+                }
+
+                // Process render queue
+                await this.processRenderQueue();
+                this.isRendering = false;
+            }
+
+            async processRenderQueue() {
+                while (this.renderQueue.length > 0 && !this.isRendering) {
+                    const pageNum = this.renderQueue.shift();
+                    await this.renderPage(pageNum);
+                }
+            }
+
+            async renderPage(pageNum) {
+                if (this.renderedPages.has(pageNum)) return;
+
+                try {
+                    const page = await this.pdfDoc.getPage(pageNum + 1);
+                    const viewport = page.getViewport({ scale: CONFIG.RENDER_SCALE });
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'page-canvas';
+                    canvas.style.width = `${viewport.width / CONFIG.RENDER_SCALE}px`;
+                    canvas.style.height = `${viewport.height / CONFIG.RENDER_SCALE}px`;
+                    
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    // Position canvas
+                    let offsetTop = 0;
+                    for (let i = 0; i < pageNum; i++) {
+                        offsetTop += this.pageHeights[i] || (viewport.height / CONFIG.RENDER_SCALE);
+                    }
+                    canvas.style.position = 'absolute';
+                    canvas.style.top = `${offsetTop}px`;
+                    canvas.style.left = '50%';
+                    canvas.style.transform = 'translateX(-50%)';
+
+                    this.container.appendChild(canvas);
+                    this.renderedPages.set(pageNum, canvas);
+
+                    await page.render({
+                        canvasContext: ctx,
+                        viewport: viewport
+                    }).promise;
+
+                    // Update actual height
+                    this.pageHeights[pageNum] = viewport.height / CONFIG.RENDER_SCALE;
+                    this.updatePlaceholders();
+
+                    // Update progress
+                    if (this.onProgress) {
+                        this.onProgress(pageNum + 1, this.totalPages);
+                    }
+                } catch (e) {
+                    console.warn('Page render error:', e);
+                }
+            }
+
+            getCurrentPage(scrollTop) {
+                let cumulativeHeight = 0;
+                for (let i = 0; i < this.totalPages; i++) {
+                    const height = this.pageHeights[i] || (1200 / CONFIG.RENDER_SCALE);
+                    if (cumulativeHeight + height > scrollTop) {
+                        return i + 1;
+                    }
+                    cumulativeHeight += height;
+                }
+                return this.totalPages;
+            }
+
+            scrollToPage(pageNum) {
+                let offsetTop = 0;
+                for (let i = 0; i < pageNum - 1; i++) {
+                    offsetTop += this.pageHeights[i] || (1200 / CONFIG.RENDER_SCALE);
+                }
+                this.container.parentElement.scrollTo({ top: offsetTop, behavior: 'smooth' });
+            }
+
+            destroy() {
+                this.pdfDoc = null;
+                this.renderedPages.clear();
+                this.renderQueue = [];
+                this.container.innerHTML = '';
+            }
+        }
+
+        // ==================== APP STATE ====================
+        const state = {
+            books: [],
+            filteredBooks: [],
+            selectedBooks: new Set(),
+            isSelectionMode: false,
+            currentFilter: 'all',
+            currentBookId: null,
+            readingQueue: [],
+            queueIndex: 0,
+            password: null,
+            isLocked: true
+        };
+
+        const db = new DBManager();
+        const bufferManager = new PDFBufferManager();
+        let virtualRenderer = null;
+
+        // ==================== DOM ELEMENTS ====================
+        const elements = {
+            lockScreen: document.getElementById('lock-screen'),
+            lockInput: document.getElementById('lock-input'),
+            library: document.getElementById('library'),
+            bookList: document.getElementById('book-list'),
+            fileInput: document.getElementById('file-input'),
+            importBtn: document.getElementById('import-btn'),
+            selectionBar: document.getElementById('selection-bar'),
+            selectionCount: document.querySelector('.selection-count'),
+            selectAllBtn: document.getElementById('select-all-btn'),
+            deleteSelectedBtn: document.getElementById('delete-selected-btn'),
+            doneSelectingBtn: document.getElementById('done-selecting-btn'),
+            contextMenu: document.getElementById('context-menu'),
+            toast: document.getElementById('toast'),
+            statTotal: document.getElementById('stat-total'),
+            statReading: document.getElementById('stat-reading'),
+            statCompleted: document.getElementById('stat-completed'),
+            tabs: document.querySelectorAll('.tab'),
+            readerModal: document.getElementById('reader-modal'),
+            readerHeader: document.getElementById('reader-header'),
+            readerFooter: document.getElementById('reader-footer'),
+            readerContent: document.getElementById('reader-content'),
+            readerCanvasContainer: document.getElementById('reader-canvas-container'),
+            readerTitle: document.getElementById('reader-title'),
+            readerProgress: document.getElementById('reader-progress'),
+            readerBackBtn: document.getElementById('reader-back-btn'),
+            readerMenuBtn: document.getElementById('reader-menu-btn'),
+            prevPdfBtn: document.getElementById('prev-pdf-btn'),
+            nextPdfBtn: document.getElementById('next-pdf-btn'),
+            gestureLeft: document.getElementById('gesture-left'),
+            gestureCenter: document.getElementById('gesture-center'),
+            gestureRight: document.getElementById('gesture-right')
+        };
+
+        // ==================== INITIALIZATION ====================
+        async function init() {
+            await db.open();
+            await loadPassword();
+            await loadBooks();
+            setupEventListeners();
+            checkInstallPrompt();
+            
+            if (state.password) {
+                showLockScreen();
+            } else {
+                hideLockScreen();
+            }
+        }
+
+        async function loadPassword() {
+            state.password = localStorage.getItem(CONFIG.PASSWORD_KEY);
+        }
+
+        async function loadBooks() {
+            state.books = await db.getAll();
+            state.books.sort((a, b) => (a.order || 0) - (b.order || 0));
+            applyFilter();
+            updateStats();
+        }
+
+        function applyFilter() {
+            switch (state.currentFilter) {
+                case 'to-read':
+                    state.filteredBooks = state.books.filter(b => b.status === 'to-read');
+                    break;
+                case 'reading':
+                    state.filteredBooks = state.books.filter(b => b.status === 'reading');
+                    break;
+                case 'completed':
+                    state.filteredBooks = state.books.filter(b => b.status === 'completed');
+                    break;
+                case 'priority':
+                    state.filteredBooks = state.books.filter(b => b.priority);
+                    break;
+                default:
+                    state.filteredBooks = [...state.books];
+            }
+            renderBookList();
+        }
+
+        function updateStats() {
+            elements.statTotal.textContent = state.books.length;
+            elements.statReading.textContent = state.books.filter(b => b.status === 'reading').length;
+            elements.statCompleted.textContent = state.books.filter(b => b.status === 'completed').length;
+        }
+
+        // ==================== RENDERING ====================
+        function renderBookList() {
+            if (state.filteredBooks.length === 0) {
+                elements.bookList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📚</div>
+                        <p>No PDFs found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            elements.bookList.innerHTML = state.filteredBooks.map(book => `
+                <div class="book-item ${state.selectedBooks.has(book.id) ? 'selected' : ''}" 
+                     data-id="${book.id}">
+                    <div class="checkbox ${state.selectedBooks.has(book.id) ? 'checked' : ''}" 
+                         onclick="toggleSelection('${book.id}', event)"></div>
+                    <div class="book-cover">📄</div>
+                    <div class="book-info">
+                        <div class="book-title">${escapeHtml(book.name)}</div>
+                        <div class="book-meta">
+                            <span>${formatSize(book.size)}</span>
+                            <span>${book.lastPage || 0} / ${book.totalPages || '?'}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${getProgressPercent(book)}%"></div>
+                        </div>
+                    </div>
+                    <div class="book-status status-${book.status}">${book.status}</div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function getProgressPercent(book) {
+            if (!book.totalPages) return 0;
+            return Math.round((book.lastPage / book.totalPages) * 100);
+        }
+
+        // ==================== SELECTION MODE ====================
+        function toggleSelection(id, event) {
+            event.stopPropagation();
+            
+            if (!state.isSelectionMode) {
+                state.isSelectionMode = true;
+                elements.selectionBar.classList.add('active');
+            }
+
+            if (state.selectedBooks.has(id)) {
+                state.selectedBooks.delete(id);
+            } else {
+                state.selectedBooks.add(id);
+            }
+
+            updateSelectionUI();
+            renderBookList();
+        }
+
+        function updateSelectionUI() {
+            elements.selectionCount.textContent = `${state.selectedBooks.size} selected`;
+            
+            if (state.selectedBooks.size === 0) {
+                state.isSelectionMode = false;
+                elements.selectionBar.classList.remove('active');
+            }
+        }
+
+        // ==================== FILE IMPORT ====================
+        async function handleFiles(files) {
+            showToast(`Importing ${files.length} PDF(s)...`);
+            
+            for (const file of files) {
+                if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+                    continue;
+                }
+
+                try {
+                    const order = await db.getMaxOrder();
+                    const arrayBuffer = await file.arrayBuffer();
+                    
+                    // Get page count
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    const pdfDoc = await loadingTask.promise;
+                    
+                    const book = {
+                        id: generateId(),
+                        name: file.name.replace('.pdf', ''),
+                        size: file.size,
+                        order: order,
+                        status: 'to-read',
+                        lastPage: 0,
+                        totalPages: pdfDoc.numPages,
+                        progress: 0,
+                        lastModified: Date.now(),
+                        priority: false
+                    };
+
+                    await db.add(book);
+                    pdfDoc.destroy();
+                } catch (e) {
+                    console.error('Import error:', e);
+                }
+            }
+
+            await loadBooks();
+            showToast('Import complete!');
+        }
+
+        function generateId() {
+            return 'pdf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // ==================== READER ====================
+        async function openReader(bookId, fromQueue = false) {
+            const book = await db.getById(bookId);
+            if (!book) return;
+
+            state.currentBookId = bookId;
+            elements.readerTitle.textContent = book.name;
+            elements.readerModal.classList.add('active');
+            
+            // Update status
+            if (book.status === 'to-read') {
+                book.status = 'reading';
+                await db.update(book);
+                await loadBooks();
+            }
+
+            // Setup virtual renderer
+            if (virtualRenderer) {
+                virtualRenderer.destroy();
+            }
+            virtualRenderer = new VirtualScrollRenderer(
+                elements.readerCanvasContainer,
+                (current, total) => {
+                    elements.readerProgress.textContent = `Page ${current} / ${total}`;
+                }
+            );
+
+            // Load PDF
+            const pdfDoc = await bufferManager.get(bookId, book.blob);
+            await virtualRenderer.loadPDF(pdfDoc);
+
+            // Resume from last page
+            if (book.lastPage > 1) {
+                setTimeout(() => {
+                    virtualRenderer.scrollToPage(book.lastPage);
+                }, 100);
+            }
+
+            // Setup scroll listener
+            elements.readerContent.addEventListener('scroll', handleReaderScroll);
+
+            // Setup reading queue
+            if (!fromQueue) {
+                state.readingQueue = state.books
+                    .filter(b => b.status === 'reading' || b.status === 'to-read')
+                    .map(b => b.id);
+                state.queueIndex = state.readingQueue.indexOf(bookId);
+            }
+
+            // Preload next PDF
+            preloadNextPdf();
+        }
+
+        async function handleReaderScroll() {
+            if (!virtualRenderer) return;
+
+            const scrollTop = elements.readerContent.scrollTop;
+            const currentPage = virtualRenderer.getCurrentPage(scrollTop);
+            const book = await db.getById(state.currentBookId);
+
+            if (book && currentPage !== book.lastPage) {
+                book.lastPage = currentPage;
+                book.progress = currentPage / book.totalPages;
+                
+                // Check completion
+                if (currentPage >= book.totalPages) {
+                    book.status = 'completed';
+                    book.progress = 1;
+                    showToast('🎉 PDF Complete!');
+                    
+                    // Auto-advance to next
+                    setTimeout(() => advanceToNextPdf(), 2000);
+                }
+
+                // Check preload threshold
+                if (book.progress >= CONFIG.PRELOAD_THRESHOLD) {
+                    preloadNextPdf();
+                }
+
+                await db.update(book);
+            }
+
+            await virtualRenderer.renderVisiblePages();
+        }
+
+        async function preloadNextPdf() {
+            const nextIndex = state.queueIndex + 1;
+            if (nextIndex < state.readingQueue.length) {
+                const nextBookId = state.readingQueue[nextIndex];
+                const nextBook = await db.getById(nextBookId);
+                if (nextBook) {
+                    await bufferManager.preload(nextBookId, nextBook.blob);
+                }
+            }
+        }
+
+        async function advanceToNextPdf() {
+            const nextIndex = state.queueIndex + 1;
+            if (nextIndex < state.readingQueue.length) {
+                closeReader();
+                setTimeout(() => {
+                    openReader(state.readingQueue[nextIndex], true);
+                }, 100);
+            }
+        }
+
+        function closeReader() {
+            elements.readerModal.classList.remove('active');
+            if (virtualRenderer) {
+                virtualRenderer.destroy();
+                virtualRenderer = null;
+            }
+            bufferManager.clear();
+            loadBooks();
+        }
+
+        // ==================== GESTURES ====================
+        function setupGestures() {
+            let controlTimeout;
+
+            elements.readerContent.addEventListener('click', (e) => {
+                // Show/hide controls
+                elements.readerModal.classList.toggle('show-controls');
+                
+                clearTimeout(controlTimeout);
+                controlTimeout = setTimeout(() => {
+                    elements.readerModal.classList.remove('show-controls');
+                }, 3000);
+            });
+
+            elements.gestureRight.addEventListener('click', () => {
+                // Scroll up (next content)
+                elements.readerContent.scrollBy({ top: -window.innerHeight * 0.8, behavior: 'smooth' });
+            });
+
+            elements.gestureLeft.addEventListener('click', () => {
+                // Scroll down (previous content)
+                elements.readerContent.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
+            });
+        }
+
+        // ==================== CONTEXT MENU ====================
+        function showContextMenu(event, bookId) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            state.contextBookId = bookId;
+            const book = state.books.find(b => b.id === bookId);
+            
+            elements.contextMenu.innerHTML = `
+                <div class="context-item" onclick="setPriority('${bookId}', ${!book.priority})">
+                    ${book.priority ? '⭐ Remove Priority' : '⭐ Set Priority'}
+                </div>
+                <div class="context-item" onclick="renameBook('${bookId}')">
+                    ✏️ Rename
+                </div>
+                <div class="context-item" onclick="moveBook('${bookId}', -1)">
+                    ⬆️ Move Up
+                </div>
+                <div class="context-item" onclick="moveBook('${bookId}', 1)">
+                    ⬇️ Move Down
+                </div>
+                <div class="context-item danger" onclick="deleteBook('${bookId}')">
+                    🗑️ Delete
+                </div>
+            `;
+
+            elements.contextMenu.style.left = `${event.clientX}px`;
+            elements.contextMenu.style.top = `${event.clientY}px`;
+            elements.contextMenu.classList.add('active');
+        }
+
+        function hideContextMenu() {
+            elements.contextMenu.classList.remove('active');
+        }
+
+        // ==================== BOOK OPERATIONS ====================
+        async function deleteBook(id) {
+            hideContextMenu();
+            await db.delete(id);
+            await loadBooks();
+            showToast('PDF deleted');
+        }
+
+        async function deleteSelected() {
+            await db.bulkDelete(Array.from(state.selectedBooks));
+            state.selectedBooks.clear();
+            updateSelectionUI();
+            await loadBooks();
+            showToast('PDFs deleted');
+        }
+
+        async function setPriority(id, priority) {
+            hideContextMenu();
+            const book = await db.getById(id);
+            book.priority = priority;
+            await db.update(book);
+            await loadBooks();
+        }
+
+        async function renameBook(id) {
+            hideContextMenu();
+            const book = await db.getById(id);
+            const newName = prompt('Enter new name:', book.name);
+            if (newName && newName.trim()) {
+                book.name = newName.trim();
+                await db.update(book);
+                await loadBooks();
+            }
+        }
+
+        async function moveBook(id, direction) {
+            hideContextMenu();
+            const index = state.books.findIndex(b => b.id === id);
+            if (index === -1) return;
+
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= state.books.length) return;
+
+            // Swap orders
+            const temp = state.books[index].order;
+            state.books[index].order = state.books[newIndex].order;
+            state.books[newIndex].order = temp;
+
+            await db.update(state.books[index]);
+            await db.update(state.books[newIndex]);
+            await loadBooks();
+        }
+
+        // ==================== LOCK SCREEN ====================
+        function showLockScreen() {
+            elements.lockScreen.classList.remove('hidden');
+            elements.lockInput.value = '';
+            elements.lockInput.focus();
+        }
+
+        function hideLockScreen() {
+            elements.lockScreen.classList.add('hidden');
+            state.isLocked = false;
+        }
+
+        async function verifyPassword(input) {
+            const stored = localStorage.getItem(CONFIG.PASSWORD_KEY);
+            if (stored && input === stored) {
+                hideLockScreen();
+            } else if (input.length === 6) {
+                elements.lockInput.value = '';
+                showToast('Incorrect passcode');
+            }
+        }
+
+        async function setPassword(password) {
+            localStorage.setItem(CONFIG.PASSWORD_KEY, password);
+            state.password = password;
+            showToast('Passcode set');
+        }
+
+        async function clearPassword() {
+            localStorage.removeItem(CONFIG.PASSWORD_KEY);
+            state.password = null;
+            showToast('Passcode removed');
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        function setupEventListeners() {
+            // File import
+            elements.importBtn.addEventListener('click', () => {
+                elements.fileInput.click();
+            });
+
+            elements.fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+                e.target.value = '';
+            });
+
+            // Filter tabs
+            elements.tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    elements.tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    state.currentFilter = tab.dataset.filter;
+                    applyFilter();
+                });
+            });
+
+            // Selection mode
+            elements.selectAllBtn.addEventListener('click', () => {
+                state.filteredBooks.forEach(book => {
+                    state.selectedBooks.add(book.id);
+                });
+                updateSelectionUI();
+                renderBookList();
+            });
+
+            elements.deleteSelectedBtn.addEventListener('click', deleteSelected);
+            
+            elements.doneSelectingBtn.addEventListener('click', () => {
+                state.selectedBooks.clear();
+                state.isSelectionMode = false;
+                elements.selectionBar.classList.remove('active');
+                renderBookList();
+            });
+
+            // Book list interactions
+            elements.bookList.addEventListener('click', (e) => {
+                const bookItem = e.target.closest('.book-item');
+                if (bookItem && !e.target.closest('.checkbox')) {
+                    const bookId = bookItem.dataset.id;
+                    
+                    if (state.isSelectionMode) {
+                        toggleSelection(bookId, e);
+                    } else {
+                        openReader(bookId);
+                    }
+                }
+            });
+
+            elements.bookList.addEventListener('contextmenu', (e) => {
+                const bookItem = e.target.closest('.book-item');
+                if (bookItem) {
+                    showContextMenu(e, bookItem.dataset.id);
+                }
+            });
+
+            // Hide context menu
+            document.addEventListener('click', hideContextMenu);
+            document.addEventListener('contextmenu', hideContextMenu);
+
+            // Reader controls
+            elements.readerBackBtn.addEventListener('click', closeReader);
+            
+            elements.prevPdfBtn.addEventListener('click', () => {
+                const prevIndex = state.queueIndex - 1;
+                if (prevIndex >= 0) {
+                    closeReader();
+                    setTimeout(() => openReader(state.readingQueue[prevIndex], true), 100);
+                }
+            });
+
+            elements.nextPdfBtn.addEventListener('click', () => {
+                advanceToNextPdf();
+            });
+
+            // Lock screen
+            elements.lockInput.addEventListener('input', (e) => {
+                if (e.target.value.length === 6) {
+                    verifyPassword(e.target.value);
+                }
+            });
+
+            // Settings
+            document.getElementById('settings-btn').addEventListener('click', () => {
+                const action = state.password ? 
+                    confirm('Remove passcode lock?') : 
+                    prompt('Set 6-digit passcode:');
+                
+                if (action === true) {
+                    clearPassword();
+                } else if (action && action.length === 6) {
+                    setPassword(action);
+                } else if (action) {
+                    showToast('Passcode must be 6 digits');
+                }
+            });
+
+            // Gestures
+            setupGestures();
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (elements.readerModal.classList.contains('active')) {
+                    if (e.key === 'Escape') closeReader();
+                    if (e.key === 'ArrowRight') elements.readerContent.scrollBy({ top: -200 });
+                    if (e.key === 'ArrowLeft') elements.readerContent.scrollBy({ top: 200 });
+                }
+            });
+
+            // PWA install
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                // Could show custom install prompt here
+            });
+        }
+
+        // ==================== UTILITIES ====================
+        function showToast(message) {
+            elements.toast.textContent = message;
+            elements.toast.classList.add('show');
+            setTimeout(() => {
+                elements.toast.classList.remove('show');
+            }, 2000);
+        }
+
+        function checkInstallPrompt() {
+            // Service worker registration
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => console.log('SW registered:', reg.scope))
+                    .catch(err => console.error('SW registration failed:', err));
+            }
+        }
+
+        // ==================== START APP ====================
+        init();
+    </script>
+</body>
+</html>
